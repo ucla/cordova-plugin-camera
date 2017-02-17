@@ -33,6 +33,10 @@ import android.util.Log;
 
 import org.apache.cordova.CordovaInterface;
 import org.apache.cordova.LOG;
+import org.apache.cordova.PluginResult;
+import org.apache.cordova.CallbackContext;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.io.*;
 import java.util.Locale;
@@ -77,7 +81,7 @@ public class FileHelper {
      * @return the full path to the file
      */
     public static String getRealPath(String uriString, Boolean isPicture, CordovaInterface cordova, CallbackContext callbackContext) {
-        return FileHelper.getRealPath(Uri.parse(uriString), cordova);
+        return FileHelper.getRealPath(Uri.parse(uriString), isPicture, cordova, callbackContext);
     }
 
     @SuppressLint("NewApi")
@@ -135,7 +139,7 @@ public class FileHelper {
                 return getDataColumn(context, contentUri, selection, selectionArgs);
             } else if (isDriveStorage(uri)){
                 Log.d(LOG_TAG, "got to drive");
-                if(isPicture)
+                if(!isPicture)
                     return downloadURI(uri, cordova, callbackContext);
             } else {
                 Log.d(LOG_TAG,"OH NO!!!");
@@ -186,7 +190,7 @@ public class FileHelper {
      * @return an input stream into the data at the given URI or null if given an invalid URI string
      * @throws IOException
      */
-    public static InputStream getInputStreamFromUriString(String uriString, CordovaInterface cordova)
+    public static InputStream getInputStreamFromUriString(String uriString, CordovaInterface cordova, CallbackContext callbackContext)
             throws IOException {
         InputStream returnValue = null;
         if (uriString.startsWith("content")) {
@@ -209,7 +213,7 @@ public class FileHelper {
                     returnValue = null;
                 }
                 if (returnValue == null) {
-                    returnValue = new FileInputStream(getRealPath(uriString, cordova));
+                    returnValue = new FileInputStream(getRealPath(uriString, true, cordova, callbackContext));
                 }
             }
         } else {
@@ -371,10 +375,11 @@ public class FileHelper {
             Log.d(LOG_TAG,"Total file size to read (in bytes) : " + fis.available());
 
             int content;
-            Double bytesDone = 0;
+            Double bytesDone = 0.0;
+            Double total = new Integer(fis.available()).doubleValue();
             while ((content = fis.read()) != -1) {
                 if(++bytesDone % 10000 == 0){
-                    Double progress = bytesDone / fis.available();
+                    Double progress = Math.abs(1 - fis.available() / total);
                     JSONObject jsonObj = new JSONObject();
                     try {
                         jsonObj.put("progress", progress);
@@ -384,8 +389,8 @@ public class FileHelper {
 
                     PluginResult progressResult = new PluginResult(PluginResult.Status.OK, jsonObj);
                     progressResult.setKeepCallback(true);
-                    callback.sendPluginResult(progressResult);
-                    Log.d(LOG_TAG,"finished "+Integer.toString(bytesDone)+"bytes. "+fis.available()+" bytes to go");
+                    callbackContext.sendPluginResult(progressResult);
+                    Log.d(LOG_TAG,"finished "+Double.toString(bytesDone)+" bytes. "+fis.available()+" bytes to go of: "+Double.toString(Math.abs(1 - fis.available() / total)));
                 }
                 fos.write(content);
             }

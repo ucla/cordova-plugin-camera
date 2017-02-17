@@ -153,15 +153,16 @@ cameraExport.getPicture = function(successCallback, errorCallback, options) {
                 mediaType, allowEdit, correctOrientation, saveToPhotoAlbum, popoverOptions, cameraDirection];
     
     var _this = this;
-    var win = function(result) {
+    
+    var win = (function(result) {
         if (typeof result.progress !== 'undefined') {
-            if (typeof _this.options.progress === 'function') {
-                _this.options.progress(result.progress);
+            if (typeof options.progress === 'function') {
+                options.progress(result.progress);
             }
         } else {
-            _this.successCallback(result);
+            successCallback(result);
         }
-    };
+    })
     exec(win, errorCallback, "Camera", "takePicture", args);
     // XXX: commented out
     //return new CameraPopoverHandle();
