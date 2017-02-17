@@ -649,7 +649,7 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
         }
         int rotate = 0;
 
-        String fileLocation = FileHelper.getRealPath(uri, this.cordova);
+        String fileLocation = FileHelper.getRealPath(uri, this.mediaType == PICTURE,  this.cordova, callbackContext);
         LOG.d(LOG_TAG, "File locaton is: " + fileLocation);
 
         // If you ask for video or all media type you will automatically get back a file URI
@@ -911,7 +911,7 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
             InputStream fileStream = null;
             Bitmap image = null;
             try {
-                fileStream = FileHelper.getInputStreamFromUriString(imageUrl, cordova);
+                fileStream = FileHelper.getInputStreamFromUriString(imageUrl, cordova, callbackContext);
                 image = BitmapFactory.decodeStream(fileStream);
             } finally {
                 if (fileStream != null) {
@@ -937,7 +937,7 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
         Uri galleryUri = null;
         int rotate = 0;
         try {
-            InputStream fileStream = FileHelper.getInputStreamFromUriString(imageUrl, cordova);
+            InputStream fileStream = FileHelper.getInputStreamFromUriString(imageUrl, cordova, callbackContext);
             if (fileStream != null) {
                 // Generate a temporary file
                 String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
@@ -971,15 +971,13 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
             return null;
         }
 
-
-
         try {
             // figure out the original width and height of the image
             BitmapFactory.Options options = new BitmapFactory.Options();
             options.inJustDecodeBounds = true;
             InputStream fileStream = null;
             try {
-                fileStream = FileHelper.getInputStreamFromUriString(galleryUri.toString(), cordova);
+                fileStream = FileHelper.getInputStreamFromUriString(galleryUri.toString(), cordova, callbackContext);
                 BitmapFactory.decodeStream(fileStream, null, options);
             } finally {
                 if (fileStream != null) {
@@ -1024,7 +1022,7 @@ public class CameraLauncher extends CordovaPlugin implements MediaScannerConnect
             options.inSampleSize = calculateSampleSize(rotatedWidth, rotatedHeight,  widthHeight[0], widthHeight[1]);
             Bitmap unscaledBitmap = null;
             try {
-                fileStream = FileHelper.getInputStreamFromUriString(galleryUri.toString(), cordova);
+                fileStream = FileHelper.getInputStreamFromUriString(galleryUri.toString(), cordova, callbackContext);
                 unscaledBitmap = BitmapFactory.decodeStream(fileStream, null, options);
             } finally {
                 if (fileStream != null) {

@@ -33,6 +33,10 @@ import android.util.Log;
 
 import org.apache.cordova.CordovaInterface;
 import org.apache.cordova.LOG;
+import org.apache.cordova.PluginResult;
+import org.apache.cordova.CallbackContext;
+import org.json.JSONException;
+import org.json.JSONObject;
 
 import java.io.*;
 import java.util.Locale;
@@ -50,7 +54,7 @@ public class FileHelper {
      * @return the full path to the file
      */
     @SuppressWarnings("deprecation")
-    public static String getRealPath(Uri uri, CordovaInterface cordova) {
+    public static String getRealPath(Uri uri, Boolean isPicture, CordovaInterface cordova, CallbackContext callbackContext) {
         String realPath = null;
             Log.d(LOG_TAG,"getting real path");
 
@@ -59,7 +63,7 @@ public class FileHelper {
 
         // SDK >= 11
         else
-            realPath = FileHelper.getRealPathFromURI_API11_And_Above(cordova.getActivity(), uri, cordova);
+            realPath = FileHelper.getRealPathFromURI_API11_And_Above(cordova.getActivity(), uri, isPicture, cordova, callbackContext);
 
         //Return the URI string if no other type of path has been found
         if(realPath == null)
@@ -76,12 +80,12 @@ public class FileHelper {
      * @param cordova the current application context
      * @return the full path to the file
      */
-    public static String getRealPath(String uriString, CordovaInterface cordova) {
-        return FileHelper.getRealPath(Uri.parse(uriString), cordova);
+    public static String getRealPath(String uriString, Boolean isPicture, CordovaInterface cordova, CallbackContext callbackContext) {
+        return FileHelper.getRealPath(Uri.parse(uriString), isPicture, cordova, callbackContext);
     }
 
     @SuppressLint("NewApi")
-    public static String getRealPathFromURI_API11_And_Above(final Context context, final Uri uri, CordovaInterface cordova) {
+    public static String getRealPathFromURI_API11_And_Above(final Context context, final Uri uri, Boolean isPicture, CordovaInterface cordova, CallbackContext callbackContext) {
 
         final boolean isKitKat = Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT;
         // DocumentProvider
@@ -135,11 +139,11 @@ public class FileHelper {
                 return getDataColumn(context, contentUri, selection, selectionArgs);
             } else if (isDriveStorage(uri)){
                 Log.d(LOG_TAG, "got to drive");
-                return downloadURI(uri, cordova);
-            } else{
+                if(!isPicture)
+                    return downloadURI(uri, cordova, callbackContext);
+            } else {
                 Log.d(LOG_TAG,"OH NO!!!");
             }
-
         }
         // MediaStore (and general)
         else if ("content".equalsIgnoreCase(uri.getScheme())) {
@@ -186,7 +190,7 @@ public class FileHelper {
      * @return an input stream into the data at the given URI or null if given an invalid URI string
      * @throws IOException
      */
-    public static InputStream getInputStreamFromUriString(String uriString, CordovaInterface cordova)
+    public static InputStream getInputStreamFromUriString(String uriString, CordovaInterface cordova, CallbackContext callbackContext)
             throws IOException {
         InputStream returnValue = null;
         if (uriString.startsWith("content")) {
@@ -209,7 +213,7 @@ public class FileHelper {
                     returnValue = null;
                 }
                 if (returnValue == null) {
-                    returnValue = new FileInputStream(getRealPath(uriString, cordova));
+                    returnValue = new FileInputStream(getRealPath(uriString, true, cordova, callbackContext));
                 }
             }
         } else {
@@ -303,14 +307,14 @@ public class FileHelper {
     }
 
     /**
-     * Create a new file from the uri. This is for files that exist outside of the device.
-     * The reason for this is becasue you cant use files outside of the current context, except local files.
+     * Create a new file based on the file located on a content provider.
+     * This is neccessary with documents that need to be read outside the context.
      *
      * @param uri The Uri to query.
-     * @return The file path to the newly created file.
+     * @return a path to the copied file.
      * @author Samuel Thompson
      */
-    public static String downloadURI(Uri uri, CordovaInterface cordova){
+    public static String downloadURI(Uri uri, CordovaInterface cordova, CallbackContext callbackContext){
         Context context = cordova.getActivity();
         ParcelFileDescriptor mInputPFD;
         File newVideo = new File(context.getExternalCacheDir().getPath()+"/fileDelete");
@@ -371,10 +375,23 @@ public class FileHelper {
             Log.d(LOG_TAG,"Total file size to read (in bytes) : " + fis.available());
 
             int content;
-            int bytesDone = 0;
+            Double bytesDone = 0.0;
+            Double total = new Integer(fis.available()).doubleValue();
             while ((content = fis.read()) != -1) {
-                if(++bytesDone % 100000 == 0)
-                    Log.d(LOG_TAG,"finished "+Integer.toString(bytesDone)+"bytes. "+fis.available()+" bytes to go");
+                if(++bytesDone % 10000 == 0){
+                    Double progress = Math.abs(1 - fis.available() / total);
+                    JSONObject jsonObj = new JSONObject();
+                    try {
+                        jsonObj.put("progress", progress);
+                    } catch (JSONException e) {
+                        e.printStackTrace();
+                    }
+
+                    PluginResult progressResult = new PluginResult(PluginResult.Status.OK, jsonObj);
+                    progressResult.setKeepCallback(true);
+                    callbackContext.sendPluginResult(progressResult);
+                    Log.d(LOG_TAG,"finished "+Double.toString(bytesDone)+" bytes. "+fis.available()+" bytes to go of: "+Double.toString(Math.abs(1 - fis.available() / total)));
+                }
                 fos.write(content);
             }
             
