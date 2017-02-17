@@ -50,7 +50,7 @@ public class FileHelper {
      * @return the full path to the file
      */
     @SuppressWarnings("deprecation")
-    public static String getRealPath(Uri uri, CordovaInterface cordova) {
+    public static String getRealPath(Uri uri, Boolean isPicture, CordovaInterface cordova, CallbackContext callbackContext) {
         String realPath = null;
             Log.d(LOG_TAG,"getting real path");
 
@@ -59,7 +59,7 @@ public class FileHelper {
 
         // SDK >= 11
         else
-            realPath = FileHelper.getRealPathFromURI_API11_And_Above(cordova.getActivity(), uri, cordova);
+            realPath = FileHelper.getRealPathFromURI_API11_And_Above(cordova.getActivity(), uri, isPicture, cordova, callbackContext);
 
         //Return the URI string if no other type of path has been found
         if(realPath == null)
@@ -76,12 +76,12 @@ public class FileHelper {
      * @param cordova the current application context
      * @return the full path to the file
      */
-    public static String getRealPath(String uriString, CordovaInterface cordova) {
+    public static String getRealPath(String uriString, Boolean isPicture, CordovaInterface cordova, CallbackContext callbackContext) {
         return FileHelper.getRealPath(Uri.parse(uriString), cordova);
     }
 
     @SuppressLint("NewApi")
-    public static String getRealPathFromURI_API11_And_Above(final Context context, final Uri uri, CordovaInterface cordova) {
+    public static String getRealPathFromURI_API11_And_Above(final Context context, final Uri uri, Boolean isPicture, CordovaInterface cordova, CallbackContext callbackContext) {
 
         final boolean isKitKat = Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT;
         // DocumentProvider
@@ -135,11 +135,11 @@ public class FileHelper {
                 return getDataColumn(context, contentUri, selection, selectionArgs);
             } else if (isDriveStorage(uri)){
                 Log.d(LOG_TAG, "got to drive");
-                return downloadURI(uri, cordova);
-            } else{
+                if(isPicture)
+                    return downloadURI(uri, cordova, callbackContext);
+            } else {
                 Log.d(LOG_TAG,"OH NO!!!");
             }
-
         }
         // MediaStore (and general)
         else if ("content".equalsIgnoreCase(uri.getScheme())) {
@@ -303,14 +303,14 @@ public class FileHelper {
     }
 
     /**
-     * Create a new file from the uri. This is for files that exist outside of the device.
-     * The reason for this is becasue you cant use files outside of the current context, except local files.
+     * Create a new file based on the file located on a content provider.
+     * This is neccessary with documents that need to be read outside the context.
      *
      * @param uri The Uri to query.
-     * @return The file path to the newly created file.
+     * @return a path to the copied file.
      * @author Samuel Thompson
      */
-    public static String downloadURI(Uri uri, CordovaInterface cordova){
+    public static String downloadURI(Uri uri, CordovaInterface cordova, CallbackContext callbackContext){
         Context context = cordova.getActivity();
         ParcelFileDescriptor mInputPFD;
         File newVideo = new File(context.getExternalCacheDir().getPath()+"/fileDelete");
@@ -371,10 +371,22 @@ public class FileHelper {
             Log.d(LOG_TAG,"Total file size to read (in bytes) : " + fis.available());
 
             int content;
-            int bytesDone = 0;
+            Double bytesDone = 0;
             while ((content = fis.read()) != -1) {
-                if(++bytesDone % 100000 == 0)
+                if(++bytesDone % 10000 == 0){
+                    Double progress = bytesDone / fis.available();
+                    JSONObject jsonObj = new JSONObject();
+                    try {
+                        jsonObj.put("progress", progress);
+                    } catch (JSONException e) {
+                        e.printStackTrace();
+                    }
+
+                    PluginResult progressResult = new PluginResult(PluginResult.Status.OK, jsonObj);
+                    progressResult.setKeepCallback(true);
+                    callback.sendPluginResult(progressResult);
                     Log.d(LOG_TAG,"finished "+Integer.toString(bytesDone)+"bytes. "+fis.available()+" bytes to go");
+                }
                 fos.write(content);
             }
             

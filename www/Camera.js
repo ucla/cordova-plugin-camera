@@ -151,8 +151,18 @@ cameraExport.getPicture = function(successCallback, errorCallback, options) {
 
     var args = [quality, destinationType, sourceType, targetWidth, targetHeight, encodingType,
                 mediaType, allowEdit, correctOrientation, saveToPhotoAlbum, popoverOptions, cameraDirection];
-
-    exec(successCallback, errorCallback, "Camera", "takePicture", args);
+    
+    var _this = this;
+    var win = function(result) {
+        if (typeof result.progress !== 'undefined') {
+            if (typeof _this.options.progress === 'function') {
+                _this.options.progress(result.progress);
+            }
+        } else {
+            _this.successCallback(result);
+        }
+    };
+    exec(win, errorCallback, "Camera", "takePicture", args);
     // XXX: commented out
     //return new CameraPopoverHandle();
 };
