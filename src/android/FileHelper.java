@@ -24,16 +24,17 @@ import android.database.Cursor;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Environment;
+import android.os.ParcelFileDescriptor;
 import android.provider.DocumentsContract;
 import android.provider.MediaStore;
+import android.provider.OpenableColumns;
 import android.webkit.MimeTypeMap;
+import android.util.Log;
 
 import org.apache.cordova.CordovaInterface;
 import org.apache.cordova.LOG;
 
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.InputStream;
+import java.io.*;
 import java.util.Locale;
 
 public class FileHelper {
@@ -51,13 +52,14 @@ public class FileHelper {
     @SuppressWarnings("deprecation")
     public static String getRealPath(Uri uri, CordovaInterface cordova) {
         String realPath = null;
+            Log.d(LOG_TAG,"getting real path");
 
         if (Build.VERSION.SDK_INT < 11)
             realPath = FileHelper.getRealPathFromURI_BelowAPI11(cordova.getActivity(), uri);
 
         // SDK >= 11
         else
-            realPath = FileHelper.getRealPathFromURI_API11_And_Above(cordova.getActivity(), uri);
+            realPath = FileHelper.getRealPathFromURI_API11_And_Above(cordova.getActivity(), uri, cordova);
 
         //Return the URI string if no other type of path has been found
         if(realPath == null)
@@ -79,14 +81,16 @@ public class FileHelper {
     }
 
     @SuppressLint("NewApi")
-    public static String getRealPathFromURI_API11_And_Above(final Context context, final Uri uri) {
+    public static String getRealPathFromURI_API11_And_Above(final Context context, final Uri uri, CordovaInterface cordova) {
 
         final boolean isKitKat = Build.VERSION.SDK_INT >= Build.VERSION_CODES.KITKAT;
         // DocumentProvider
         if (isKitKat && DocumentsContract.isDocumentUri(context, uri)) {
 
+            Log.d(LOG_TAG,"is kitkat and docs contract");
             // ExternalStorageProvider
             if (isExternalStorageDocument(uri)) {
+            Log.d(LOG_TAG,"external storage doc");
                 final String docId = DocumentsContract.getDocumentId(uri);
                 final String[] split = docId.split(":");
                 final String type = split[0];
@@ -99,6 +103,7 @@ public class FileHelper {
             }
             // DownloadsProvider
             else if (isDownloadsDocument(uri)) {
+            Log.d(LOG_TAG,"download provider");
 
                 final String id = DocumentsContract.getDocumentId(uri);
                 final Uri contentUri = ContentUris.withAppendedId(
@@ -108,6 +113,7 @@ public class FileHelper {
             }
             // MediaProvider
             else if (isMediaDocument(uri)) {
+            Log.d(LOG_TAG,"media document");
                 final String docId = DocumentsContract.getDocumentId(uri);
                 final String[] split = docId.split(":");
                 final String type = split[0];
@@ -127,11 +133,17 @@ public class FileHelper {
                 };
 
                 return getDataColumn(context, contentUri, selection, selectionArgs);
+            } else if (isDriveStorage(uri)){
+                Log.d(LOG_TAG, "got to drive");
+                return downloadURI(uri, cordova);
+            } else{
+                Log.d(LOG_TAG,"OH NO!!!");
             }
+
         }
         // MediaStore (and general)
         else if ("content".equalsIgnoreCase(uri.getScheme())) {
-
+            Log.d(LOG_TAG,"media store");
             // Return the remote address
             if (isGooglePhotosUri(uri))
                 return uri.getLastPathSegment();
@@ -140,7 +152,11 @@ public class FileHelper {
         }
         // File
         else if ("file".equalsIgnoreCase(uri.getScheme())) {
+            Log.d(LOG_TAG,"file");
             return uri.getPath();
+        } else {
+
+            Log.d(LOG_TAG,"ELSE crap");
         }
 
         return null;
@@ -287,6 +303,108 @@ public class FileHelper {
     }
 
     /**
+     * Create a new file from the uri. This is for files that exist outside of the device.
+     * The reason for this is becasue you cant use files outside of the current context, except local files.
+     *
+     * @param uri The Uri to query.
+     * @return The file path to the newly created file.
+     * @author Samuel Thompson
+     */
+    public static String downloadURI(Uri uri, CordovaInterface cordova){
+        Context context = cordova.getActivity();
+        ParcelFileDescriptor mInputPFD;
+        File newVideo = new File(context.getExternalCacheDir().getPath()+"/fileDelete");
+
+        Log.d(LOG_TAG,uri.getPath());
+        Log.d(LOG_TAG,uri.toString());
+        Log.d(LOG_TAG,uri.getAuthority());
+
+        Cursor returnCursor = context.getContentResolver().query(uri, null, null, null, null);
+        /*
+        * Get the column indexes of the data in the Cursor,
+        * move to the first row in the Cursor, get the data,
+        * and display it.
+        */
+        int nameIndex = returnCursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+        int sizeIndex = returnCursor.getColumnIndex(OpenableColumns.SIZE);
+        returnCursor.moveToFirst();
+        String outputName = returnCursor.getString(nameIndex);
+        // outputName = outputName.substring(0, outputName.lastIndexOf("."));
+        Log.d(LOG_TAG,outputName);
+        Log.d(LOG_TAG,Long.toString(returnCursor.getLong(sizeIndex)));
+        
+        try {
+            /*
+            * Get the content resolver instance for this context, and use it
+            * to get a ParcelFileDescriptor for the file.
+            */
+            mInputPFD = context.getContentResolver().openFileDescriptor(uri, "r");
+        } catch (FileNotFoundException e) {
+            e.printStackTrace();
+            Log.e("MainActivity", "File not found returning old uri good luck!");
+            return uri.toString();
+        }
+        // Get a regular file descriptor for the file
+        FileDescriptor fd = mInputPFD.getFileDescriptor();
+
+        FileOutputStream fos = null;
+        FileInputStream fis = null;
+
+        Log.d(LOG_TAG,context.getExternalCacheDir().getPath()+"/"+outputName);
+        try {
+            newVideo = new File(context.getExternalCacheDir().getPath()+"/"+outputName);
+            Log.d(LOG_TAG,newVideo.toURI().toString());
+            Log.d(LOG_TAG,newVideo.toURI().getPath());
+            Log.d(LOG_TAG,newVideo.getPath());
+            Log.d(LOG_TAG,Long.toString(newVideo.getTotalSpace()));
+
+            fos = new FileOutputStream(newVideo);
+
+            // if file doesnt exists, then create it
+            if (!newVideo.exists()) {
+                Log.d(LOG_TAG,"creating file");
+                newVideo.createNewFile();
+            }
+
+            fis = new FileInputStream(fd);
+
+            Log.d(LOG_TAG,"Total file size to read (in bytes) : " + fis.available());
+
+            int content;
+            int bytesDone = 0;
+            while ((content = fis.read()) != -1) {
+                if(++bytesDone % 100000 == 0)
+                    Log.d(LOG_TAG,"finished "+Integer.toString(bytesDone)+"bytes. "+fis.available()+" bytes to go");
+                fos.write(content);
+            }
+            
+            fos.flush();
+            fos.close();
+
+            Log.d(LOG_TAG,"done");
+            Log.d(LOG_TAG,Long.toString(newVideo.getTotalSpace()));
+        } catch (IOException e) {
+            e.printStackTrace();
+        } finally {
+            try {
+                if (fos != null) {
+                    fos.close();
+                }
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+            try {
+                if (fis != null)
+                    fis.close();
+            } catch (IOException ex) {
+                ex.printStackTrace();
+            }
+        }
+
+        return newVideo.toURI().toString();
+    }
+
+    /**
      * @param uri The Uri to check.
      * @return Whether the Uri authority is ExternalStorageProvider.
      * @author paulburke
@@ -319,5 +437,13 @@ public class FileHelper {
      */
     public static boolean isGooglePhotosUri(Uri uri) {
         return "com.google.android.apps.photos.content".equals(uri.getAuthority());
+    }
+
+    /**
+     * @param uri The Uri to check.
+     * @return Whether the Uri authority is Drive Storage.
+     */
+    public static boolean isDriveStorage(Uri uri) {
+        return "com.google.android.apps.docs.storage".equals(uri.getAuthority());
     }
 }
