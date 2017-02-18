@@ -378,7 +378,7 @@ public class FileHelper {
             Double bytesDone = 0.0;
             Double total = new Integer(fis.available()).doubleValue();
             while ((content = fis.read()) != -1) {
-                if(++bytesDone % 10000 == 0){
+                if(++bytesDone % 20000 == 0){
                     Double progress = Math.abs(1 - fis.available() / total);
                     JSONObject jsonObj = new JSONObject();
                     try {
@@ -401,6 +401,7 @@ public class FileHelper {
             Log.d(LOG_TAG,"done");
             Log.d(LOG_TAG,Long.toString(newVideo.getTotalSpace()));
         } catch (IOException e) {
+            callbackContext.error("Failed to download file. Check your network connection.")
             e.printStackTrace();
         } finally {
             try {
