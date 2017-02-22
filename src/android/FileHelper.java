@@ -373,12 +373,12 @@ public class FileHelper {
             fis = new FileInputStream(fd);
 
             Log.d(LOG_TAG,"Total file size to read (in bytes) : " + fis.available());
-
-            int content;
+            // 2^18 is 262144
+            byte[] content = new byte[262144];
             Double bytesDone = 0.0;
             Double total = new Integer(fis.available()).doubleValue();
-            while ((content = fis.read()) != -1) {
-                if(++bytesDone % 20000 == 0){
+            while ((fis.read(content)) != -1) {
+                if(++bytesDone % 5 == 0){
                     Double progress = Math.abs(1 - fis.available() / total);
                     JSONObject jsonObj = new JSONObject();
                     try {
@@ -390,7 +390,7 @@ public class FileHelper {
                     PluginResult progressResult = new PluginResult(PluginResult.Status.OK, jsonObj);
                     progressResult.setKeepCallback(true);
                     callbackContext.sendPluginResult(progressResult);
-                    Log.d(LOG_TAG,"finished "+Double.toString(bytesDone)+" bytes. "+fis.available()+" bytes to go of: "+Double.toString(Math.abs(1 - fis.available() / total)));
+                    Log.d(LOG_TAG,"finished "+Double.toString(bytesDone * 262144)+" bytes. "+fis.available()+" bytes to go of: "+Double.toString(Math.abs(1 - fis.available() / total)));
                 }
                 fos.write(content);
             }
@@ -401,7 +401,7 @@ public class FileHelper {
             Log.d(LOG_TAG,"done");
             Log.d(LOG_TAG,Long.toString(newVideo.getTotalSpace()));
         } catch (IOException e) {
-            callbackContext.error("Failed to download file. Check your network connection.")
+            callbackContext.error("There was an error processing your file");
             e.printStackTrace();
         } finally {
             try {
